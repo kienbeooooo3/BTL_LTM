@@ -5,15 +5,31 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.*;
 
-/** Hộp thoại neon thay cho JOptionPane (trắng, lệch tông). Modal, Enter = đồng ý, Esc = từ chối, kéo để di chuyển. */
+/**
+ * Hộp thoại neon thay cho JOptionPane (trắng, lệch tông). Modal, Enter = đồng ý, Esc = từ chối, kéo để di chuyển.
+ *
+ * Có 2 kiểu dùng:
+ *  - {@link #ask()} — chặn (modal). Dùng cho thông báo người chơi chủ động bấm.
+ *  - {@link #askAsync} — không chặn (modeless). Dùng cho lời mời: server có thể gửi
+ *    tin khác (đối thủ thoát, bắt đầu ván mới) trong lúc hộp thoại đang mở.
+ */
 public final class NeonDialog {
     private final JDialog d;
     private final JComponent outer;
     private boolean result;
+    /** Callback cho kiểu không chặn. */
+    private java.util.function.Consumer<Boolean> asyncCb;
 
     /** @param no null nếu chỉ muốn một nút (thông báo). */
     public NeonDialog(Window owner, String title, String message, String yes, String no) {
-        d = new JDialog(owner, Dialog.ModalityType.APPLICATION_MODAL);
+        this(owner, title, message, yes, no, true);
+    }
+
+    /**
+     * @param modal true = chặn (dùng {@link #ask()}), false = không chặn (dùng {@link #askAsync}).
+     */
+    public NeonDialog(Window owner, String title, String message, String yes, String no, boolean modal) {
+        d = new JDialog(owner, modal ? Dialog.ModalityType.APPLICATION_MODAL : Dialog.ModalityType.MODELESS);
         d.setUndecorated(true);
         boolean translucent = true;
         try { d.setBackground(new Color(0, 0, 0, 0)); } catch (Exception e) { translucent = false; }
@@ -85,6 +101,9 @@ public final class NeonDialog {
     private void finish(boolean r) {
         result = r;
         d.dispose();
+        // Kiểu không chặn: gọi callback sau khi đóng.
+        java.util.function.Consumer<Boolean> cb = asyncCb;
+        if (cb != null) { asyncCb = null; cb.accept(r); }
     }
 
     /** Hiện hộp thoại (chặn cho tới khi người chơi chọn). Trả về true nếu bấm nút đồng ý. */
@@ -96,14 +115,33 @@ public final class NeonDialog {
         return result;
     }
 
+    /**
+     * Hiện hộp thoại KHÔNG chặn: trả về ngay, gọi callback khi người chơi chọn.
+     * Dùng cho lời mời để không chặn EDT (nếu chặn, các tin khác của server sẽ phải xếp hàng chờ).
+     */
+    public void askAsync(java.util.function.Consumer<Boolean> cb) {
+        asyncCb = cb;
+        Anim.addTarget(outer);
+        d.setVisible(true);
+        // Không dispose ở đây: hộp thoại tự đóng khi người chơi bấm nút.
+    }
+
     /** Đóng từ bên ngoài (ví dụ đối thủ đã thoát khi đang hỏi ván mới) — ask() sẽ trả về false. */
     public void close() {
         result = false;
         d.dispose();
+        java.util.function.Consumer<Boolean> cb = asyncCb;
+        if (cb != null) { asyncCb = null; cb.accept(false); }
     }
 
     public static boolean confirm(Component parent, String title, String msg, String yes, String no) {
         return new NeonDialog(SwingUtilities.getWindowAncestor(parent), title, msg, yes, no).ask();
+    }
+
+    /** Bản không chặn của {@link #confirm}: callback được gọi khi người chơi chọn. */
+    public static void confirmAsync(Component parent, String title, String msg, String yes, String no,
+                                   java.util.function.Consumer<Boolean> cb) {
+        new NeonDialog(SwingUtilities.getWindowAncestor(parent), title, msg, yes, no, false).askAsync(cb);
     }
 
     public static void info(Component parent, String title, String msg) {

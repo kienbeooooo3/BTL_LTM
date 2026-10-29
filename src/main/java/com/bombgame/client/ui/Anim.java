@@ -23,7 +23,7 @@ public final class Anim {
 
     private static double time, dt = 1 / 60.0;
     private static volatile int quality = 2;          // 2 = cao, 1 = vừa, 0 = thấp
-    private static int fps = 30, slow;
+    private static int fps = 30, slow, fast;
     private static boolean idle;
     private static long last;
     private static Timer timer;
@@ -51,6 +51,7 @@ public final class Anim {
     public static void setGameMode(boolean game) {
         fps = game ? 60 : 30;
         slow = 0;
+        fast = 0;
         if (timer != null && !idle) timer.setDelay(1000 / fps);
     }
 
@@ -77,11 +78,28 @@ public final class Anim {
         step(Math.min(real, .05));
     }
 
-    /** Nếu khoảng cách giữa các khung hình kéo dài liên tục -> hạ chất lượng hiệu ứng. */
+    /**
+     * Bộ điều tốc chất lượng hiệu ứng.
+     * - Máy chậm liên tục -> hạ dần quality (2 -> 1 -> 0) để giữ FPS mượt.
+     * - Máy chạy mượt trở lại -> NÂNG lại quality, nếu không thì một lần lag là giao diện
+     *   xấu suốt phiên (trước đây quality chỉ giảm, không bao giờ hồi phục).
+     */
     private static void governor(double real) {
         double expect = 1.0 / fps;
-        if (real > expect * 2.2) slow++; else if (slow > 0) slow--;
-        if (slow > 40 && quality > 0) { quality--; slow = 0; }
+        if (real > expect * 2.2) {
+            slow++;
+            fast = 0;
+            if (slow > 40 && quality > 0) { quality--; slow = 0; }
+        } else {
+            if (slow > 0) slow--;
+            // Chạy mượt liên tục ~8 giây -> nâng chất lượng lên 1 bậc.
+            if (real < expect * 1.25) {
+                fast++;
+                if (fast > (int) (8 * fps) && quality < 2) { quality++; fast = 0; slow = 0; }
+            } else {
+                fast = 0;
+            }
+        }
     }
 
     /** Chạy một khung hình: cập nhật logic rồi repaint. Public để test/benchmark gọi trực tiếp. */

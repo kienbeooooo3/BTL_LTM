@@ -103,8 +103,16 @@ public class ClientMain {
             case "INVITE_EXPIRED" -> { lobby.toast(m[1] + " không phản hồi — lời thách đấu đã hết hạn"); lobby.setInvitePending(false); }
             case "INVITE_CANCELLED" -> { lobby.toast(m[1] + " đã hủy lời thách đấu"); lobby.setInvitePending(false); }
             case "INVITE" -> {
-                boolean ok = NeonDialog.confirm(f, "Lời thách đấu", m[1] + " thách đấu bạn một ván Bom!", "CHẤP NHẬN", "TỪ CHỐI");
-                net.send((ok ? "ACCEPT|" : "REJECT|") + m[1]);
+                // Hộp thoại KHÔNG chặn: nếu chặn, các tin khác của server (đối thủ thoát,
+                // bắt đầu ván mới) sẽ phải xếp hàng chờ. Kèm timeout tự từ chối sau 30s.
+                String from = m[1];
+                NeonDialog dlg = new NeonDialog(f, "Lời thách đấu", from + " thách đấu bạn một ván Bom!", "CHẤP NHẬN", "TỪ CHỐI", false);
+                Timer to = new Timer(30_000, e -> { dlg.close(); net.send("REJECT|" + from); });
+                to.setRepeats(false); to.start();
+                dlg.askAsync(ok -> {
+                    to.stop();                                   // đã chọn -> bỏ timeout
+                    net.send((ok ? "ACCEPT|" : "REJECT|") + from);
+                });
             }
             case "MATCH_START" -> { oppName = m[1]; inGame = true; lobby.setInvitePending(false); game.start(me, oppName); show("game"); }
             case "ROUND" -> game.onRound(num(m, 1), num(m, 2), num(m, 3), num(m, 4));
