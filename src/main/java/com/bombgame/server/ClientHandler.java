@@ -48,6 +48,9 @@ public class ClientHandler extends Thread {
     }
 
     private void handle(String[] m) {
+        // PING/PONG phải trả lời được cả trước khi đăng nhập (client heartbeat chạy ngay
+        // sau khi kết nối, không đợi đăng nhập xong).
+        if ("PING".equals(m[0])) { send("PONG"); return; }
         if (name == null) {
             if (m.length < 3) return;
             String u = m[1].trim().toLowerCase(), p = m[2];
