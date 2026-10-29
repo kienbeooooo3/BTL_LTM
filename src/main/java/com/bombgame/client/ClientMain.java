@@ -96,7 +96,7 @@ public class ClientMain {
             case "LOGIN_OK" -> { me = m[1]; lobby.setMe(me); show("lobby"); net.send("BOARD"); }
             case "LOGIN_FAIL" -> login.error(m[1]);
             case "REGISTER_OK" -> login.info("Đăng ký thành công! Hãy đăng nhập.");
-            case "PLAYERS" -> { lobby.setPlayers(m[1]); if (!inGame) net.send("BOARD"); }
+            case "PLAYERS" -> lobby.setPlayers(m[1]);   // server đã gửi kèm BOARD, không cần xin lại
             case "BOARD" -> lobby.setBoard(m[1]);
             case "INVITE_FAIL" -> { lobby.toast(m[1]); lobby.setInvitePending(false); }
             case "INVITE_REJECTED" -> { lobby.toast(m[1] + " đã từ chối lời thách đấu"); lobby.setInvitePending(false); }

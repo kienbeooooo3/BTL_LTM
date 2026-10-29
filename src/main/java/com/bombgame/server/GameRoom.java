@@ -106,6 +106,7 @@ public class GameRoom {
                 try { p[i].refreshStats(); }
                 catch (Exception e) { logDb("làm mới thống kê", p[i].name, e); }
             }
+            GameServer.invalidateBoard();      // điểm mới -> bảng xếp hạng phải cập nhật ngay
             try { GameServer.broadcastPlayers(); }
             catch (Exception e) { logDb("broadcast", "-", e); }
         });

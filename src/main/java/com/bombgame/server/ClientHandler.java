@@ -74,7 +74,7 @@ public class ClientHandler extends Thread {
             case "GUESS" -> { GameRoom r = room; if (r != null) r.guess(this, Integer.parseInt(m[1])); }
             case "LEAVE" -> { GameRoom r = room; if (r != null) r.leave(this); }
             case "REMATCH" -> { GameRoom r = room; if (r != null) r.rematch(this, m[1].equals("1")); }
-            case "BOARD" -> send("BOARD|" + PlayerDao.leaderboard());
+            case "BOARD" -> send("BOARD|" + GameServer.leaderboardCached());
             default -> { }
         }
     }
