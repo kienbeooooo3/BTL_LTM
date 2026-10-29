@@ -1,15 +1,33 @@
 # Bomb Guess Online (Java 17 · Swing · MySQL)
 
 ## Cấu trúc
-- `src/main/java/com/bombgame/server` – GameServer, ClientHandler, GameRoom (trọng tài), PlayerDao, Database
+- `src/main/java/com/bombgame/server` – GameServer, ClientHandler, GameRoom (trọng tài), PlayerDao, Database, DbPool, Config
 - `src/main/java/com/bombgame/client` – ClientMain, NetClient, `ui/` (Login, Lobby, Game, hiệu ứng)
 - `sql/schema.sql` – tạo database bombgame, bảng Players
+- `config.properties` – cấu hình server (DB, cổng); có thể ghi đè bằng `-Ddb.pass=...`
+
+## Cấu hình
+Sửa `config.properties` (hoặc truyền `-Ddb.url=... -Ddb.user=... -Ddb.pass=... -Dgame.port=...`):
+```
+db.url=jdbc:mysql://localhost:3306/bombgame
+db.user=root
+db.pass=1234
+game.port=9999
+```
+Server tự tạo bảng và tự nâng cấp schema cũ (thêm cột `password_salt`, đổi `score` sang `DECIMAL(10,1)`, thêm index).
 
 ## Chạy
 1. MySQL: bật MySQL 8 chạy ở cổng 3306, user `root` / mật khẩu `1234` (chạy `sql/schema.sql` hoặc để server tự tạo DB/bảng).
 2. `mvn compile`
 3. Server: `mvn --% exec:java -Dexec.mainClass=com.bombgame.server.GameServer`
 4. Client (mở nhiều cửa sổ): `mvn --% exec:java -Dexec.mainClass=com.bombgame.client.ClientMain`
+
+> Không có Maven? Dùng JDK 17+ trực tiếp:
+> ```
+> javac -encoding UTF-8 -d out (Get-ChildItem -Recurse src\main\java -Filter *.java).FullName
+> java -cp "out;mysql-connector-j-8.3.0.jar" com.bombgame.server.GameServer
+> java -cp "out;mysql-connector-j-8.3.0.jar" com.bombgame.client.ClientMain
+> ```
 
 ## Chạy 2 máy cùng 1 mạng
 1. 1 máy làm sevver và client , 1 máy client

@@ -2,6 +2,7 @@ package com.bombgame.server;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.sql.*;
 import java.util.HexFormat;
 import java.util.Locale;
@@ -11,24 +12,48 @@ import java.util.Locale;
  * Dùng {@link DbPool} để tái sử dụng kết nối (mỗi kết nối mới tốn ~3 câu hỏi handshake).
  * Mọi method KHÔNG ném exception ra ngoài: lỗi DB chỉ được ghi log và trả giá trị an toàn,
  * để một sự cố MySQL không làm treo ván đấu hay đánh sập server.
+ *
+ * Mật khẩu được băm SHA-256 kèm salt ngẫu nhiên riêng cho từng tài khoản
+ * (trước đây băm trần không salt: hai tài khoản cùng mật khẩu cho cùng hash,
+ * và bảng hash dễ bị dịch ngược bằng bảng tra cứu).
  */
 public final class PlayerDao {
+    private static final SecureRandom RND = new SecureRandom();
+
     private PlayerDao() { }
 
-    static String hash(String p) {
+    /** Tạo salt ngẫu nhiên 16 byte (32 ký tự hex). */
+    static String newSalt() {
+        byte[] b = new byte[16];
+        RND.nextBytes(b);
+        return HexFormat.of().formatHex(b);
+    }
+
+    /** Băm mật khẩu: SHA-256(salt + password) -> 64 ký tự hex. */
+    static String hash(String salt, String p) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(salt.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(md.digest(p.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    /** Băm không salt (giữ lại cho tương thích dữ liệu cũ đã đăng ký trước khi thêm cột salt). */
+    static String hashLegacy(String p) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(p.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) { throw new RuntimeException(e); }
     }
 
-    /** Đăng ký tài khoản mới. Trả false nếu tên đã tồn tại HOẶC lỗi DB. */
+    /** Đăng ký tài khoản mới (có salt ngẫu nhiên). Trả false nếu tên đã tồn tại HOẶC lỗi DB. */
     public static boolean register(String u, String p) {
-        String sql = "INSERT IGNORE INTO Players(username,password_hash) VALUES(?,?)";
+        String sql = "INSERT IGNORE INTO Players(username,password_hash,password_salt) VALUES(?,?,?)";
         Connection c = null;
         try {
             c = DbPool.get();
+            String salt = newSalt();
             try (PreparedStatement ps = c.prepareStatement(sql)) {
-                ps.setString(1, u); ps.setString(2, hash(p));
+                ps.setString(1, u); ps.setString(2, hash(salt, p)); ps.setString(3, salt);
                 return ps.executeUpdate() > 0;
             }
         } catch (Exception e) {
@@ -37,14 +62,27 @@ public final class PlayerDao {
         } finally { DbPool.release(c); }
     }
 
-    /** Đăng nhập. Trả false nếu sai thông tin hoặc lỗi DB. */
+    /**
+     * Đăng nhập. Trả false nếu sai thông tin hoặc lỗi DB.
+     * Chấp nhận cả tài khoản cũ (hash không salt) và tài khoản mới (có salt).
+     */
     public static boolean login(String u, String p) {
         Connection c = null;
         try {
             c = DbPool.get();
-            try (PreparedStatement ps = c.prepareStatement("SELECT 1 FROM Players WHERE username=? AND password_hash=?")) {
-                ps.setString(1, u); ps.setString(2, hash(p));
-                try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT password_hash,password_salt FROM Players WHERE username=?")) {
+                ps.setString(1, u);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return false;
+                    String h = rs.getString(1);
+                    String salt = rs.getString(2);
+                    if (salt == null || salt.isEmpty()) {
+                        // Tài khoản cũ: so khớp bằng hash không salt.
+                        return h != null && h.equals(hashLegacy(p));
+                    }
+                    return h != null && h.equals(hash(salt, p));
+                }
             }
         } catch (Exception e) {
             GameRoom.logDb("đăng nhập", u, e);
