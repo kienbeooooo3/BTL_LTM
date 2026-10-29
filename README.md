@@ -8,6 +8,8 @@
 - `sql/schema.sql` – tạo database bombgame, bảng `players`
 - `config.properties` – cấu hình server (DB, cổng, logging); có thể ghi đè bằng `-Ddb.pass=...`
 - `logs/` – log theo ngày (`bombgame-YYYY-MM-DD.log`), tự sinh, không commit
+- `docs/screenshots/` – ảnh chụp màn hình giao diện
+- `.github/workflows/build.yml` – CI: compile + chạy unit test mỗi lần push
 
 ## Cấu hình
 Sửa `config.properties` (hoặc truyền `-Ddb.url=... -Ddb.user=... -Ddb.pass=... -Dgame.port=...`):
@@ -52,6 +54,13 @@ Mọi thông tin đi qua logger `com.bombgame.util.Log` thay vì `System.out`:
 > java -cp "out;mysql-connector-j-8.3.0.jar" com.bombgame.server.GameServer
 > java -cp "out;mysql-connector-j-8.3.0.jar" com.bombgame.client.ClientMain
 > ```
+>
+> Lưu ý: thư mục `out/` chỉ là build output tạm, đã được thêm vào `.gitignore` — có thể xóa bất cứ lúc nào.
+
+## Ảnh chụp màn hình
+| Sảnh chờ | Ván đấu |
+|---|---|
+| ![Sảnh chờ](docs/screenshots/screen_clients.png) | ![Ván đấu](docs/screenshots/screen1.png) |
 
 ## Chạy test
 ```
@@ -63,7 +72,10 @@ mvn test -Pintegration       # unit + integration test (cần MySQL + server đa
 | `ConfigTest` | Thứ tự ưu tiên cấu hình: system property > file > mặc định |
 | `PlayerDaoHashTest` | Băm mật khẩu: salt ngẫu nhiên, 3 scheme, tự nhận diện, từ chối scheme lạ |
 | `LogTest` | Level lọc, placeholder, ghi file theo ngày, stdout vs stderr |
+| `AnimQualityTest` | Bộ điều tốc hiệu ứng: hạ chất lượng khi máy chậm, hồi phục khi máy mượt |
 | `ProtocolIntegrationTest` | Protocol client↔server qua socket thật: đăng ký/đăng nhập, PING/PONG, ván đấu, lệnh rác, đăng xuất, bảng xếp hạng |
+| `InviteLifecycleTest` | Vòng đời lời mời: hủy/từ chối phải giải phóng BUSY cho cả hai bên; `ACCEPT` sai tên không kẹt BUSY |
+| `MatchFlowIntegrationTest` | REMATCH chỉ chạy khi cả hai đồng ý (`yes[]` phải reset), `LEAVE` → `OPP_LEFT`, thách đấu người không tồn tại, UTF-8 trên wire |
 | `MidGameDbFailureTest` | DB chết giữa ván → `GAME_OVER` vẫn tới cả hai bên, client không treo |
 
 Test integration dùng tag `integration`; mặc định `mvn test` chỉ chạy unit test (profile `unit-only`).
