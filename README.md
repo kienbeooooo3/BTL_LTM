@@ -3,8 +3,11 @@
 ## Cấu trúc
 - `src/main/java/com/bombgame/server` – GameServer, ClientHandler, GameRoom (trọng tài), PlayerDao, Database, DbPool, Config
 - `src/main/java/com/bombgame/client` – ClientMain, NetClient, `ui/` (Login, Lobby, Game, hiệu ứng)
-- `sql/schema.sql` – tạo database bombgame, bảng Players
-- `config.properties` – cấu hình server (DB, cổng); có thể ghi đè bằng `-Ddb.pass=...`
+- `src/main/java/com/bombgame/util/Log` – logger dùng chung (console + file theo ngày)
+- `src/test/java` – test JUnit 5 (unit test không cần DB, integration test cần MySQL + server)
+- `sql/schema.sql` – tạo database bombgame, bảng `players`
+- `config.properties` – cấu hình server (DB, cổng, logging); có thể ghi đè bằng `-Ddb.pass=...`
+- `logs/` – log theo ngày (`bombgame-YYYY-MM-DD.log`), tự sinh, không commit
 
 ## Cấu hình
 Sửa `config.properties` (hoặc truyền `-Ddb.url=... -Ddb.user=... -Ddb.pass=... -Dgame.port=...`):
@@ -13,8 +16,29 @@ db.url=jdbc:mysql://localhost:3306/bombgame
 db.user=root
 db.pass=1234
 game.port=9999
+log.level=INFO          # DEBUG | INFO | WARN | ERROR
+log.dir=logs
 ```
-Server tự tạo bảng và tự nâng cấp schema cũ (thêm cột `password_salt`, đổi `score` sang `DECIMAL(10,1)`, thêm index).
+Server tự tạo bảng và tự nâng cấp schema cũ (thêm cột `password_salt`, `hash_algo`, `losses`, `draws`, đổi `score` sang `DECIMAL(10,1)`, thêm index).
+
+> **Lưu ý tên bảng:** dùng `players` (chữ thường) cho mọi nơi. MySQL trên Windows mặc định `lower_case_table_names=1` nên `Players` và `players` là cùng một bảng, **nhưng trên Linux (mặc định = 0) chúng là hai bảng khác nhau** — dùng `Players` sẽ tạo bảng rỗng song song và dữ liệu người chơi sẽ "biến mất" khi deploy lên Linux.
+
+## Mật khẩu
+Cột `hash_algo` ghi rõ scheme băm của từng tài khoản, không phải đoán:
+| Scheme | Ý nghĩa |
+|---|---|
+| `sha256salt` | Scheme chuẩn: salt hex 32 ký tự + SHA-256(salt ‖ password) |
+| `sha256` | Dữ liệu cũ: SHA-256(password), không salt |
+| `sha256saltb64` | Dữ liệu cũ: salt Base64 (cột `salt`) + hash Base64 |
+
+Khi người chơi đăng nhập bằng scheme cũ, hệ thống **tự rehash** sang `sha256salt`.
+
+## Logging
+Mọi thông tin đi qua logger `com.bombgame.util.Log` thay vì `System.out`:
+- Level `DEBUG`/`INFO`/`WARN`/`ERROR`, đọc từ `config.properties` hoặc `-Dlog.level=DEBUG`
+- Ghi ra **console** (WARN/ERROR ra stderr) và ra **file theo ngày** `logs/bombgame-YYYY-MM-DD.log`
+- Ghi file trên luồng riêng (daemon) qua hàng đợi có giới hạn → I/O chậm không chặn logic game; lỗi ghi log bị nuốt, logger không bao giờ làm sập ứng dụng
+- Placeholder kiểu SLF4J: `Log.info("Nghe cổng {}", PORT)`
 
 ## Chạy
 1. MySQL: bật MySQL 8 chạy ở cổng 3306, user `root` / mật khẩu `1234` (chạy `sql/schema.sql` hoặc để server tự tạo DB/bảng).
@@ -28,6 +52,21 @@ Server tự tạo bảng và tự nâng cấp schema cũ (thêm cột `password_
 > java -cp "out;mysql-connector-j-8.3.0.jar" com.bombgame.server.GameServer
 > java -cp "out;mysql-connector-j-8.3.0.jar" com.bombgame.client.ClientMain
 > ```
+
+## Chạy test
+```
+mvn test                     # unit test (nhanh, KHÔNG cần MySQL/server)
+mvn test -Pintegration       # unit + integration test (cần MySQL + server đang chạy ở cổng 9999)
+```
+| Lớp test | Phạm vi |
+|---|---|
+| `ConfigTest` | Thứ tự ưu tiên cấu hình: system property > file > mặc định |
+| `PlayerDaoHashTest` | Băm mật khẩu: salt ngẫu nhiên, 3 scheme, tự nhận diện, từ chối scheme lạ |
+| `LogTest` | Level lọc, placeholder, ghi file theo ngày, stdout vs stderr |
+| `ProtocolIntegrationTest` | Protocol client↔server qua socket thật: đăng ký/đăng nhập, PING/PONG, ván đấu, lệnh rác, đăng xuất, bảng xếp hạng |
+| `MidGameDbFailureTest` | DB chết giữa ván → `GAME_OVER` vẫn tới cả hai bên, client không treo |
+
+Test integration dùng tag `integration`; mặc định `mvn test` chỉ chạy unit test (profile `unit-only`).
 
 ## Chạy 2 máy cùng 1 mạng
 1. 1 máy làm sevver và client , 1 máy client
