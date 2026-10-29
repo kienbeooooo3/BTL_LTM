@@ -1,7 +1,6 @@
 package com.bombgame.util;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,6 +26,8 @@ public final class Log {
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
     private static final Object LOCK = new Object();
+    /** Khoá riêng cho thao tác ghi/đóng file - tách khỏi LOCK để tránh khoá chéo. */
+    private static final Object WRITE_LOCK = new Object();
 
     private static volatile Level minLevel = Level.INFO;
     private static volatile Path logDir;
@@ -77,12 +78,13 @@ public final class Log {
             if (worker != null && worker.isAlive()) return;
             closed = false;
             worker = new Thread(() -> {
-                while (true) {
+                while (!closed) {
                     String line;
                     try { line = QUEUE.take(); }
                     catch (InterruptedException e) { return; }
-                    synchronized (LOCK) {
-                        if (closed) return;
+                    // Ghi dưới WRITE_LOCK để shutdown() không đóng file giữa lúc đang ghi.
+                    synchronized (WRITE_LOCK) {
+                        if (closed) { QUEUE.offer(line); return; }   // trả lại để shutdown xử lý
                         try { writeFile(line); } catch (Exception ignored) { }
                     }
                 }
@@ -158,28 +160,30 @@ public final class Log {
      * Trước khi đóng, đẩy hết dòng còn trong hàng đợi ra file để không mất log cuối cùng.
      */
     public static void flush() {
-        // Đẩy nốt các dòng đang chờ trong hàng đợi (worker có thể chưa kịp ghi).
-        String line;
-        while ((line = QUEUE.poll()) != null) {
-            try { writeFile(line); } catch (Exception ignored) { }
-        }
-        synchronized (LOCK) {
-            if (fileWriter != null) { fileWriter.flush(); fileWriter.close(); fileWriter = null; }
-        }
-    }
-
-    /** Tắt hẳn logger: dừng luồng ghi file và đóng file. Dùng khi kết thúc ứng dụng/test. */
-    public static void shutdown() {
-        synchronized (LOCK) {
-            closed = true;
+        synchronized (WRITE_LOCK) {
+            // Đẩy nốt các dòng đang chờ trong hàng đợi (worker có thể chưa kịp ghi).
             String line;
             while ((line = QUEUE.poll()) != null) {
                 try { writeFile(line); } catch (Exception ignored) { }
             }
             if (fileWriter != null) { fileWriter.flush(); fileWriter.close(); fileWriter = null; }
         }
+    }
+
+    /** Tắt hẳn logger: dừng luồng ghi file và đóng file. Dùng khi kết thúc ứng dụng/test. */
+    public static void shutdown() {
+        // Dừng worker trước để không có dòng nào đang được ghi dở.
+        synchronized (LOCK) { closed = true; }
         Thread w = worker;
-        if (w != null) w.interrupt();
+        if (w != null) { w.interrupt(); try { w.join(2000); } catch (InterruptedException ignored) { } }
         worker = null;
+        // Dọn hàng đợi và đóng file (dưới WRITE_LOCK để không đụng worker).
+        synchronized (WRITE_LOCK) {
+            String line;
+            while ((line = QUEUE.poll()) != null) {
+                try { writeFile(line); } catch (Exception ignored) { }
+            }
+            if (fileWriter != null) { fileWriter.flush(); fileWriter.close(); fileWriter = null; }
+        }
     }
 }

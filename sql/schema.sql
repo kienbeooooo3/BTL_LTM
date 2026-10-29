@@ -30,7 +30,6 @@ CREATE TABLE IF NOT EXISTS players(
     losses        INT         NOT NULL DEFAULT 0,
     draws         INT         NOT NULL DEFAULT 0,
     played        INT         NOT NULL DEFAULT 0,
-    display_name  VARCHAR(64) NOT NULL DEFAULT '',
     created_at    TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_score (score DESC, wins DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -40,7 +39,6 @@ CREATE TABLE IF NOT EXISTS players(
 --   ALTER TABLE players ADD COLUMN hash_algo     VARCHAR(16) NOT NULL DEFAULT '' AFTER password_salt;
 --   ALTER TABLE players ADD COLUMN losses       INT NOT NULL DEFAULT 0 AFTER wins;
 --   ALTER TABLE players ADD COLUMN draws        INT NOT NULL DEFAULT 0 AFTER losses;
---   ALTER TABLE players ADD COLUMN display_name VARCHAR(64) NOT NULL DEFAULT '' AFTER played;
 --   ALTER TABLE players MODIFY COLUMN score DECIMAL(10,1) NOT NULL DEFAULT 0;
 --   ALTER TABLE players ADD INDEX idx_score (score DESC, wins DESC);
 -- Server tự chạy các lệnh trên (Database.init()) nếu thiếu.

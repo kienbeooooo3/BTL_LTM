@@ -3,6 +3,7 @@ package com.bombgame.util;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -12,7 +13,13 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Unit test cho {@link Log}: level, placeholder, ghi file theo ngày. */
+/**
+ * Unit test cho {@link Log}: level, placeholder, ghi file theo ngày.
+ *
+ * <p>{@link Log} là lớp static dùng chung, nên các test trong lớp này phải chạy tuần tự
+ * ({@code @ResourceLock}) để không tranh nhau thư mục log và file đang mở.
+ */
+@ResourceLock("Log")
 class LogTest {
 
     @Test

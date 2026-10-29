@@ -1,5 +1,7 @@
 package com.bombgame.server;
 
+import com.bombgame.util.Log;
+
 import java.sql.*;
 
 /**
@@ -42,7 +44,6 @@ public final class Database {
                 "password_salt CHAR(32) NOT NULL DEFAULT '', hash_algo VARCHAR(16) NOT NULL DEFAULT ''," +
                 "score DECIMAL(10,1) NOT NULL DEFAULT 0, wins INT NOT NULL DEFAULT 0," +
                 "losses INT NOT NULL DEFAULT 0, draws INT NOT NULL DEFAULT 0, played INT NOT NULL DEFAULT 0," +
-                "display_name VARCHAR(64) NOT NULL DEFAULT ''," +
                 "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
                 "INDEX idx_score (score DESC, wins DESC)" +
                 ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -52,27 +53,41 @@ public final class Database {
             addColumnIfMissing(s, T_PLAYERS, "hash_algo", "VARCHAR(16) NOT NULL DEFAULT ''");
             addColumnIfMissing(s, T_PLAYERS, "losses", "INT NOT NULL DEFAULT 0");
             addColumnIfMissing(s, T_PLAYERS, "draws", "INT NOT NULL DEFAULT 0");
-            addColumnIfMissing(s, T_PLAYERS, "display_name", "VARCHAR(64) NOT NULL DEFAULT ''");
             try { s.execute("ALTER TABLE " + T_PLAYERS + " MODIFY COLUMN score DECIMAL(10,1) NOT NULL DEFAULT 0"); }
-            catch (SQLException ignored) { }
+            catch (SQLException e) { Log.debug("score đã đúng kiểu DECIMAL(10,1) hoặc không sửa được: {}", e.getMessage()); }
             try { s.execute("ALTER TABLE " + T_PLAYERS + " ADD INDEX idx_score (score DESC, wins DESC)"); }
-            catch (SQLException ignored) { }
+            catch (SQLException e) { Log.debug("idx_score đã tồn tại hoặc không tạo được: {}", e.getMessage()); }
 
             // Gán hash_algo cho các tài khoản đã tồn tại, dựa trên dạng dữ liệu đang lưu.
-            s.executeUpdate("UPDATE " + T_PLAYERS + " SET hash_algo='sha256salt' "
+            int a1 = s.executeUpdate("UPDATE " + T_PLAYERS + " SET hash_algo='sha256salt' "
                 + "WHERE hash_algo='' AND password_salt<>'' AND password_hash REGEXP '^[0-9a-f]{64}$'");
-            s.executeUpdate("UPDATE " + T_PLAYERS + " SET hash_algo='sha256' "
+            int a2 = s.executeUpdate("UPDATE " + T_PLAYERS + " SET hash_algo='sha256' "
                 + "WHERE hash_algo='' AND password_salt='' AND salt='' AND password_hash REGEXP '^[0-9a-f]{64}$'");
-            s.executeUpdate("UPDATE " + T_PLAYERS + " SET hash_algo='sha256saltb64' "
+            int a3 = s.executeUpdate("UPDATE " + T_PLAYERS + " SET hash_algo='sha256saltb64' "
                 + "WHERE hash_algo='' AND salt<>'' AND password_hash LIKE '%='");
+            if (a1 + a2 + a3 > 0) {
+                Log.info("Đã gán hash_algo cho {} tài khoản cũ (salt={}, không salt={}, salt base64={})",
+                        a1 + a2 + a3, a1, a2, a3);
+            }
         }
     }
 
+    /**
+     * Thêm cột nếu chưa có. Lỗi không chặn khởi động server (DB cũ có thể thiếu quyền ALTER),
+     * nhưng phải được ghi log để biết mà xử lý.
+     */
     private static void addColumnIfMissing(Statement s, String table, String column, String definition) {
         try (ResultSet rs = s.executeQuery("SHOW COLUMNS FROM " + table + " LIKE '" + column + "'")) {
             if (rs.next()) return;                       // đã có rồi
-        } catch (SQLException ignored) { }
-        try { s.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition); }
-        catch (SQLException ignored) { }
+        } catch (SQLException e) {
+            Log.warn("Không kiểm tra được cột {}.{}: {}", table, column, e.getMessage());
+            return;
+        }
+        try {
+            s.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+            Log.info("Đã thêm cột {}.{}", table, column);
+        } catch (SQLException e) {
+            Log.warn("Không thêm được cột {}.{}: {}", table, column, e.getMessage());
+        }
     }
 }

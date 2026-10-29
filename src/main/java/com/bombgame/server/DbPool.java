@@ -1,5 +1,7 @@
 package com.bombgame.server;
 
+import com.bombgame.util.Log;
+
 import java.sql.*;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -45,6 +47,8 @@ public final class DbPool {
             if (!c.getAutoCommit()) c.setAutoCommit(true);
             IDLE.push(c);
         } catch (SQLException e) {
+            // Kết nối hỏng -> loại bỏ thay vì trả về pool (tránh lỗi lặp lại).
+            Log.debug("Kết nối hỏng khi trả về pool: {}", e.getMessage());
             try { c.close(); } catch (SQLException ignored) { }
         }
     }
