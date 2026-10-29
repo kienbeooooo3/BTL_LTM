@@ -30,6 +30,7 @@ public class ClientMain {
         cards.setOpaque(false);
         login = new LoginPanel(this::doLogin);
         lobby = new LobbyPanel(net);
+        lobby.onLogout = this::doLogout;
         game = new GamePanel(net, this::toLobby);
         cards.add(login, "login"); cards.add(lobby, "lobby"); cards.add(game, "game");
         bg.add(cards);
@@ -64,12 +65,31 @@ public class ClientMain {
     private void doLogin(String host, String cmd, String u, String p) {
         try {
             if (!net.connected()) {
-                String h = host; int port = 9999;
-                if (host.contains(":")) { h = host.substring(0, host.indexOf(':')); port = Integer.parseInt(host.substring(host.indexOf(':') + 1)); }
+                String h = host.trim(); int port = 9999;
+                int c = h.lastIndexOf(':');
+                if (c > 0) {
+                    String ps = h.substring(c + 1).trim();
+                    h = h.substring(0, c).trim();
+                    if (!ps.isEmpty()) port = Integer.parseInt(ps);
+                }
+                if (h.isEmpty()) h = "localhost";
+                if (port < 1 || port > 65535) throw new NumberFormatException("cổng không hợp lệ: " + port);
                 net.connect(h, port, this::onMsg);
             }
             net.send(cmd + "|" + u + "|" + p);
         } catch (IOException | NumberFormatException e) { login.error("Không kết nối được server: " + e.getMessage()); }
+    }
+
+    /** Đăng xuất: báo server, đóng kết nối, quay về màn hình đăng nhập. */
+    private void doLogout() {
+        if (!NeonDialog.confirm(f, "Đăng xuất", "Bạn muốn đăng xuất khỏi tài khoản hiện tại?", "ĐĂNG XUẤT", "Ở LẠI")) return;
+        inGame = false;
+        me = ""; oppName = "";
+        if (rematchDlg != null) rematchDlg.close();
+        net.send("LOGOUT");
+        net.close();
+        show("login");
+        login.info("Bạn đã đăng xuất.");
     }
 
     private void toLobby() {

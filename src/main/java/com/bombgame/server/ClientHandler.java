@@ -71,12 +71,26 @@ public class ClientHandler extends Thread {
             case "ACCEPT" -> accept(m[1]);
             case "REJECT" -> reject(m[1]);
             case "CANCEL_INVITE" -> cancelInvite();
-            case "GUESS" -> { GameRoom r = room; if (r != null) r.guess(this, Integer.parseInt(m[1])); }
+            case "GUESS" -> {
+                int n;
+                try { n = Integer.parseInt(m[1].trim()); }
+                catch (NumberFormatException e) { send("ERROR|Số không hợp lệ"); return; }
+                GameRoom r = room;
+                if (r == null) { send("ERROR|Bạn không trong trận nào"); return; }
+                r.guess(this, n);
+            }
             case "LEAVE" -> { GameRoom r = room; if (r != null) r.leave(this); }
             case "REMATCH" -> { GameRoom r = room; if (r != null) r.rematch(this, m[1].equals("1")); }
             case "BOARD" -> send("BOARD|" + GameServer.leaderboardCached());
+            case "LOGOUT" -> logout();
             default -> { }
         }
+    }
+
+    /** Người chơi đăng xuất: rời phòng nếu đang đấu, gỡ khỏi danh sách online, đóng kết nối. */
+    private void logout() {
+        cleanup();
+        try { sock.close(); } catch (IOException ignored) { }
     }
 
     private void challenge(String target) {

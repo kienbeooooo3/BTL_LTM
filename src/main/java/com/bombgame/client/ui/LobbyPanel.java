@@ -19,6 +19,9 @@ public class LobbyPanel extends JPanel {
     private final JTable pt = new Theme.NeonTable(pm, "Chưa có ai online"), bt = new Theme.NeonTable(bm, "Chưa có dữ liệu xếp hạng");
     private final NeonButton cancel = new NeonButton("HỦY LỜI MỜI", Theme.GOLD);
     private final NeonButton go = new NeonButton("THÁCH ĐẤU", Theme.PINK);
+    private final NeonButton logout = new NeonButton("ĐĂNG XUẤT", Theme.RED);
+    /** Được ClientMain gán để xử lý đăng xuất (đóng kết nối, về màn hình đăng nhập). */
+    public Runnable onLogout;
     private final Pill online = new Pill(Theme.GREEN), total = new Pill(Theme.GOLD);
     private final Chip chip = new Chip();
     private final Toast toast = new Toast();
@@ -134,7 +137,14 @@ public class LobbyPanel extends JPanel {
         north.setOpaque(false);
         north.add(titles, BorderLayout.WEST);
         JPanel chipBox = new JPanel(new GridBagLayout());
-        chipBox.setOpaque(false); chipBox.add(chip);
+        chipBox.setOpaque(false);
+        GridBagConstraints cc = new GridBagConstraints();
+        cc.gridx = 0; cc.gridy = 0; cc.weightx = 1; cc.anchor = GridBagConstraints.EAST;
+        chipBox.add(chip, cc);
+        logout.setPreferredSize(new Dimension(140, 42));
+        logout.setFont(Theme.font(Font.BOLD, 13));
+        cc.gridx = 1; cc.weightx = 0; cc.insets = new Insets(0, 10, 0, 0);
+        chipBox.add(logout, cc);
         north.add(chipBox, BorderLayout.EAST);
         add(north, BorderLayout.NORTH);
 
@@ -167,6 +177,9 @@ public class LobbyPanel extends JPanel {
         pt.setToolTipText("Chọn người chơi rồi bấm THÁCH ĐẤU; bấm đúp để thách đấu nhanh");
         bt.setToolTipText("Bảng xếp hạng người chơi");
         go.addActionListener(e -> challenge());
+        logout.addActionListener(e -> {
+            if (onLogout != null) onLogout.run();
+        });
         cancel.addActionListener(e -> { net.send("CANCEL_INVITE"); setInvitePending(false); toast("Đã hủy lời thách đấu"); });
         pt.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) challenge(); }
