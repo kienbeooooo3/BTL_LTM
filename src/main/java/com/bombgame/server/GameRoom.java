@@ -1,5 +1,7 @@
 package com.bombgame.server;
 
+import com.bombgame.util.Log;
+
 import java.util.Random;
 import java.util.concurrent.*;
 
@@ -93,6 +95,7 @@ public class GameRoom {
                 String o = pts[i] == 1 ? "WIN" : pts[i] == 0 ? "LOSE" : "DRAW";
                 p[i].send("GAME_OVER|" + o + "|" + b + "|" + reason + "|" + pts[i] + "|" + pts[1 - i]);
             }
+            Log.info("Kết thúc trận {} vs {}: {} ({} vs {})", p[0].name, p[1].name, reason, pts[0], pts[1]);
             GameServer.broadcastPlayers();
         }, 2500, TimeUnit.MILLISECONDS);
 
@@ -112,9 +115,9 @@ public class GameRoom {
         });
     }
 
-    /** Ghi log lỗi DB ra console, không làm sập tiến trình server. */
+    /** Ghi log lỗi DB ra log, không làm sập tiến trình server. */
     static void logDb(String action, String who, Exception e) {
-        System.err.println("[BombServer] Lỗi DB khi " + action + " (" + who + "): " + e);
+        Log.error("Lỗi DB khi {} ({}): {}", action, who, e.toString());
     }
 
     synchronized void rematch(ClientHandler h, boolean ok) {

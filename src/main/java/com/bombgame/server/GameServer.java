@@ -1,5 +1,7 @@
 package com.bombgame.server;
 
+import com.bombgame.util.Log;
+
 import java.net.ServerSocket;
 import java.util.Locale;
 import java.util.Map;
@@ -13,16 +15,21 @@ public class GameServer {
     static final Map<String, ClientHandler> ONLINE = new ConcurrentHashMap<>();
 
     public static void main(String[] args) throws Exception {
+        Log.init("server");
         // DB lỗi không được làm server chết: vẫn cho phép vào sảnh chờ, chỉ ghi điểm/leaderboard là lỗi.
         try {
             Database.init();
-            System.out.println("[BombServer] Đã kết nối MySQL thành công.");
+            Log.info("Đã kết nối MySQL thành công.");
         } catch (Exception e) {
-            System.err.println("[BombServer] CẢNH BÁO: không kết nối được MySQL (" + e.getMessage()
-                    + "). Server vẫn chạy nhưng sẽ không lưu điểm và bảng xếp hạng.");
+            Log.warn("Không kết nối được MySQL ({}). Server vẫn chạy nhưng sẽ không lưu điểm và bảng xếp hạng.",
+                    e.getMessage());
         }
         try (ServerSocket ss = new ServerSocket(PORT)) {
-            System.out.println("[BombServer] Đang lắng nghe cổng " + PORT);
+            Log.info("Đang lắng nghe cổng {}", PORT);
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                Log.info("Đang tắt server...");
+                Log.flush();
+            }));
             while (true) new ClientHandler(ss.accept()).start();
         }
     }

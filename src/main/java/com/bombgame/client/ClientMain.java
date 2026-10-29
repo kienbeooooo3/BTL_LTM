@@ -1,6 +1,7 @@
 package com.bombgame.client;
 
 import com.bombgame.client.ui.*;
+import com.bombgame.util.Log;
 
 import javax.swing.*;
 import java.awt.*;
@@ -20,6 +21,7 @@ public class ClientMain {
     private NeonDialog rematchDlg;
 
     public static void main(String[] a) {
+        Log.init("client");
         try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch (Exception ignored) { }
         Theme.installDefaults();
         SwingUtilities.invokeLater(ClientMain::new);
@@ -107,7 +109,7 @@ public class ClientMain {
         try {
             dispatch(m);
         } catch (Exception e) {
-            System.err.println("[Client] Bỏ qua message lỗi: " + String.join("|", m) + " -> " + e);
+            Log.error("Bỏ qua message lỗi: {} -> {}", String.join("|", m), e.toString());
         }
     }
 

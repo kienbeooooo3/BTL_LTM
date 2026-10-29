@@ -1,5 +1,7 @@
 package com.bombgame.client;
 
+import com.bombgame.util.Log;
+
 import javax.swing.SwingUtilities;
 import java.io.*;
 import java.net.InetSocketAddress;
@@ -47,7 +49,7 @@ public class NetClient {
                     if (m.length > 0 && "PONG".equals(m[0])) { lastPong = System.currentTimeMillis(); continue; }
                     SwingUtilities.invokeLater(() -> {
                         try { handler.accept(m); } catch (RuntimeException e) {
-                            System.err.println("[Client] Bỏ qua message lỗi: " + String.join("|", m) + " -> " + e);
+                            Log.error("Bỏ qua message lỗi: {} -> {}", String.join("|", m), e.toString());
                         }
                     });
                 }

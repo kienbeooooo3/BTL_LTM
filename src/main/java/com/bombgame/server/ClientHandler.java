@@ -1,5 +1,7 @@
 package com.bombgame.server;
 
+import com.bombgame.util.Log;
+
 import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -55,14 +57,17 @@ public class ClientHandler extends Thread {
             String u = m[1].trim().toLowerCase(), p = m[2];
             if (m[0].equals("REGISTER")) {
                 if (!u.matches("[a-z0-9_]{3,16}") || p.length() < 3) { send("LOGIN_FAIL|Tên 3-16 ký tự (a-z, 0-9, _), mật khẩu ≥ 3 ký tự"); return; }
-                send(PlayerDao.register(u, p) ? "REGISTER_OK" : "LOGIN_FAIL|Tên đã tồn tại");
+                boolean ok = PlayerDao.register(u, p);
+                Log.info("Đăng ký tài khoản {}: {}", u, ok ? "thành công" : "thất bại (đã tồn tại)");
+                send(ok ? "REGISTER_OK" : "LOGIN_FAIL|Tên đã tồn tại");
             } else if (m[0].equals("LOGIN")) {
-                if (!PlayerDao.login(u, p)) { send("LOGIN_FAIL|Sai tên đăng nhập hoặc mật khẩu"); return; }
+                if (!PlayerDao.login(u, p)) { Log.warn("Đăng nhập sai: {}", u); send("LOGIN_FAIL|Sai tên đăng nhập hoặc mật khẩu"); return; }
                 synchronized (GameServer.class) {
                     if (GameServer.ONLINE.containsKey(u)) { send("LOGIN_FAIL|Tài khoản đang đăng nhập ở nơi khác"); return; }
                     name = u; GameServer.ONLINE.put(u, this);
                 }
                 refreshStats();
+                Log.info("{} đăng nhập (online={})", u, GameServer.ONLINE.size());
                 send("LOGIN_OK|" + u);
                 GameServer.broadcastPlayers();
             }

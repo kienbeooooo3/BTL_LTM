@@ -1,6 +1,7 @@
 target/
 out/
 build/
+logs/
 *.class
 *.jar
 *.log
