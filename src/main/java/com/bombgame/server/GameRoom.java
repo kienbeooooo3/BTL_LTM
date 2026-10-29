@@ -5,7 +5,10 @@ import java.util.concurrent.*;
 
 /** Phòng chơi: server là trọng tài, giữ bí mật quả bom. */
 public class GameRoom {
-    static final ScheduledExecutorService SCH = Executors.newScheduledThreadPool(2, r -> { Thread t = new Thread(r); t.setDaemon(true); return t; });
+    /** Scheduler cho logic ván đấu (timeout, chuyển hiệp). Tách khỏi DB để query chậm không chặn game. */
+    static final ScheduledExecutorService SCH = Executors.newScheduledThreadPool(8, r -> { Thread t = new Thread(r, "game"); t.setDaemon(true); return t; });
+    /** Executor riêng cho truy vấn DB: lỗi/kết nối chậm không được làm treo logic trận đấu. */
+    static final ExecutorService DB = Executors.newFixedThreadPool(4, r -> { Thread t = new Thread(r, "db"); t.setDaemon(true); return t; });
     static final int MAX_ROUND = 5, TURN_SEC = 15;
 
     private final ClientHandler[] p;
@@ -76,19 +79,41 @@ public class GameRoom {
         for (int i = 0; i < 2; i++) p[i].send("RESULT|" + g[i] + "|" + g[1 - i] + "|" + min + "|" + max);
     }
 
+    /**
+     * Kết thúc ván: ghi điểm và báo kết quả cho cả hai bên.
+     * Mọi thao tác DB chạy ở executor riêng và được bọc try-catch, để khi MySQL chết
+     * thì client VẪN nhận được GAME_OVER (không treo màn hình đếm mãi).
+     */
     private void finish(double p0, String reason) {
         over = true;
         final double[] pts = {p0, 1 - p0};
-        for (int i = 0; i < 2; i++) PlayerDao.addResult(p[i].name, pts[i]);
         final int b = bomb;
         SCH.schedule(() -> {
             for (int i = 0; i < 2; i++) {
                 String o = pts[i] == 1 ? "WIN" : pts[i] == 0 ? "LOSE" : "DRAW";
-                p[i].refreshStats();
                 p[i].send("GAME_OVER|" + o + "|" + b + "|" + reason + "|" + pts[i] + "|" + pts[1 - i]);
             }
             GameServer.broadcastPlayers();
         }, 2500, TimeUnit.MILLISECONDS);
+
+        // Ghi điểm + làm mới thống kê ở luồng DB riêng; lỗi DB không được ảnh hưởng kết quả trận.
+        DB.execute(() -> {
+            for (int i = 0; i < 2; i++) {
+                try { PlayerDao.addResult(p[i].name, pts[i]); }
+                catch (Exception e) { logDb("ghi điểm", p[i].name, e); }
+            }
+            for (int i = 0; i < 2; i++) {
+                try { p[i].refreshStats(); }
+                catch (Exception e) { logDb("làm mới thống kê", p[i].name, e); }
+            }
+            try { GameServer.broadcastPlayers(); }
+            catch (Exception e) { logDb("broadcast", "-", e); }
+        });
+    }
+
+    /** Ghi log lỗi DB ra console, không làm sập tiến trình server. */
+    static void logDb(String action, String who, Exception e) {
+        System.err.println("[BombServer] Lỗi DB khi " + action + " (" + who + "): " + e);
     }
 
     synchronized void rematch(ClientHandler h, boolean ok) {

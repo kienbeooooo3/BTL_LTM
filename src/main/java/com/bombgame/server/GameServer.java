@@ -8,11 +8,19 @@ import java.util.stream.Collectors;
 
 /** Server trung tâm: quản lý người chơi online và mở luồng cho từng client. */
 public class GameServer {
-    public static final int PORT = 9999;
+    /** Cổng lắng nghe (đọc từ config.properties / -Dgame.port=...). */
+    public static final int PORT = Config.getInt("game.port", 9999);
     static final Map<String, ClientHandler> ONLINE = new ConcurrentHashMap<>();
 
     public static void main(String[] args) throws Exception {
-        Database.init();
+        // DB lỗi không được làm server chết: vẫn cho phép vào sảnh chờ, chỉ ghi điểm/leaderboard là lỗi.
+        try {
+            Database.init();
+            System.out.println("[BombServer] Đã kết nối MySQL thành công.");
+        } catch (Exception e) {
+            System.err.println("[BombServer] CẢNH BÁO: không kết nối được MySQL (" + e.getMessage()
+                    + "). Server vẫn chạy nhưng sẽ không lưu điểm và bảng xếp hạng.");
+        }
         try (ServerSocket ss = new ServerSocket(PORT)) {
             System.out.println("[BombServer] Đang lắng nghe cổng " + PORT);
             while (true) new ClientHandler(ss.accept()).start();

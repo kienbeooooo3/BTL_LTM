@@ -15,39 +15,61 @@ public final class PlayerDao {
         } catch (Exception e) { throw new RuntimeException(e); }
     }
 
+    /** Đăng ký tài khoản mới. Trả false nếu tên đã tồn tại HOẶC lỗi DB (không ném exception ra ngoài). */
     public static boolean register(String u, String p) {
         String sql = "INSERT IGNORE INTO Players(username,password_hash) VALUES(?,?)";
         try (Connection c = Database.get(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, u); ps.setString(2, hash(p));
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) { throw new RuntimeException(e); }
+        } catch (Exception e) {
+            GameRoom.logDb("đăng ký", u, e);
+            return false;
+        }
     }
 
+    /** Đăng nhập. Trả false nếu sai thông tin hoặc lỗi DB (không ném exception ra ngoài). */
     public static boolean login(String u, String p) {
         try (Connection c = Database.get();
              PreparedStatement ps = c.prepareStatement("SELECT 1 FROM Players WHERE username=? AND password_hash=?")) {
             ps.setString(1, u); ps.setString(2, hash(p));
             try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
-        } catch (SQLException e) { throw new RuntimeException(e); }
+        } catch (Exception e) {
+            GameRoom.logDb("đăng nhập", u, e);
+            return false;
+        }
     }
 
-    /** @return {score, wins} */
+    /**
+     * Lấy thống kê người chơi. Trả về {0,0} nếu lỗi DB thay vì ném exception,
+     * để một sự cố MySQL không làm treo cả ván đấu đang diễn ra.
+     *
+     * @return {score, wins}
+     */
     public static double[] stats(String u) {
         try (Connection c = Database.get(); PreparedStatement ps = c.prepareStatement("SELECT score,wins FROM Players WHERE username=?")) {
             ps.setString(1, u);
             try (ResultSet rs = ps.executeQuery()) { return rs.next() ? new double[]{rs.getDouble(1), rs.getInt(2)} : new double[]{0, 0}; }
-        } catch (SQLException e) { throw new RuntimeException(e); }
+        } catch (Exception e) {
+            GameRoom.logDb("đọc thống kê", u, e);
+            return new double[]{0, 0};
+        }
     }
 
+    /** Ghi kết quả trận. Nuốt lỗi DB và ghi log, không ném ra ngoài. */
     public static void addResult(String u, double pts) {
         try (Connection c = Database.get();
              PreparedStatement ps = c.prepareStatement("UPDATE Players SET score=score+?, wins=wins+?, played=played+1 WHERE username=?")) {
             ps.setDouble(1, pts); ps.setInt(2, pts == 1.0 ? 1 : 0); ps.setString(3, u);
             ps.executeUpdate();
-        } catch (SQLException e) { throw new RuntimeException(e); }
+        } catch (Exception e) {
+            GameRoom.logDb("ghi điểm", u, e);
+        }
     }
 
-    /** Bảng xếp hạng: tổng điểm giảm dần, rồi số trận thắng giảm dần. Định dạng: name,score,wins,played;... */
+    /**
+     * Bảng xếp hạng: tổng điểm giảm dần, rồi số trận thắng giảm dần. Định dạng: name,score,wins,played;...
+     * Trả chuỗi rỗng nếu lỗi DB (client hiển thị bảng trống thay vì crash).
+     */
     public static String leaderboard() {
         StringBuilder sb = new StringBuilder();
         try (Connection c = Database.get(); Statement st = c.createStatement();
@@ -57,7 +79,10 @@ public final class PlayerDao {
                 sb.append(rs.getString(1)).append(',').append(String.format(Locale.ROOT, "%.1f", rs.getDouble(2)))
                   .append(',').append(rs.getInt(3)).append(',').append(rs.getInt(4));
             }
-        } catch (SQLException e) { throw new RuntimeException(e); }
+        } catch (Exception e) {
+            GameRoom.logDb("đọc bảng xếp hạng", "-", e);
+            return "";
+        }
         return sb.toString();
     }
 }

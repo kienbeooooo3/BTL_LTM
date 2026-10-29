@@ -25,7 +25,15 @@ public class ClientHandler extends Thread {
 
     synchronized void send(String s) { if (out != null) out.println(s); }
 
-    void refreshStats() { double[] st = PlayerDao.stats(name); score = st[0]; wins = (int) st[1]; }
+    /** Làm mới điểm/thắng từ DB. Lỗi DB không được làm treo luồng client. */
+    void refreshStats() {
+        try {
+            double[] st = PlayerDao.stats(name);
+            score = st[0]; wins = (int) st[1];
+        } catch (Exception e) {
+            GameRoom.logDb("làm mới thống kê", name, e);
+        }
+    }
 
     @Override public void run() {
         try (BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream(), StandardCharsets.UTF_8))) {
