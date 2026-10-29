@@ -8,7 +8,7 @@
 - `sql/schema.sql` – tạo database bombgame, bảng `players`
 - `config.properties` – cấu hình server (DB, cổng, logging); có thể ghi đè bằng `-Ddb.pass=...`
 - `logs/` – log theo ngày (`bombgame-YYYY-MM-DD.log`), tự sinh, không commit
-- `docs/screenshots/` – ảnh chụp màn hình giao diện
+- `docs/screenshots/` – ảnh chụp màn hình giao diện (sảnh chờ)
 - `.github/workflows/build.yml` – CI: compile + chạy unit test mỗi lần push
 
 ## Cấu hình
@@ -58,9 +58,7 @@ Mọi thông tin đi qua logger `com.bombgame.util.Log` thay vì `System.out`:
 > Lưu ý: thư mục `out/` chỉ là build output tạm, đã được thêm vào `.gitignore` — có thể xóa bất cứ lúc nào.
 
 ## Ảnh chụp màn hình
-| Sảnh chờ | Ván đấu |
-|---|---|
-| ![Sảnh chờ](docs/screenshots/screen_clients.png) | ![Ván đấu](docs/screenshots/screen1.png) |
+![Sảnh chờ](docs/screenshots/screen_clients.png)
 
 ## Chạy test
 ```
