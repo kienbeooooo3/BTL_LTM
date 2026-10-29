@@ -78,7 +78,20 @@ public class ClientMain {
         show("lobby"); lobby.toast(" "); lobby.setInvitePending(false); net.send("BOARD");
     }
 
+    /**
+     * Xử lý message từ server.
+     * Bọc toàn bộ trong try-catch: một gói tin sai định dạng chỉ được bỏ qua chứ không được
+     * làm nổ exception trên EDT (sẽ treo toàn bộ giao diện).
+     */
     private void onMsg(String[] m) {
+        try {
+            dispatch(m);
+        } catch (Exception e) {
+            System.err.println("[Client] Bỏ qua message lỗi: " + String.join("|", m) + " -> " + e);
+        }
+    }
+
+    private void dispatch(String[] m) {
         switch (m[0]) {
             case "LOGIN_OK" -> { me = m[1]; lobby.setMe(me); show("lobby"); net.send("BOARD"); }
             case "LOGIN_FAIL" -> login.error(m[1]);
@@ -94,10 +107,10 @@ public class ClientMain {
                 net.send((ok ? "ACCEPT|" : "REJECT|") + m[1]);
             }
             case "MATCH_START" -> { oppName = m[1]; inGame = true; lobby.setInvitePending(false); game.start(me, oppName); show("game"); }
-            case "ROUND" -> game.onRound(Integer.parseInt(m[1]), Integer.parseInt(m[2]), Integer.parseInt(m[3]), Integer.parseInt(m[4]));
-            case "RESULT" -> game.onResult(Integer.parseInt(m[1]), Integer.parseInt(m[2]), Integer.parseInt(m[3]), Integer.parseInt(m[4]));
+            case "ROUND" -> game.onRound(num(m, 1), num(m, 2), num(m, 3), num(m, 4));
+            case "RESULT" -> game.onResult(num(m, 1), num(m, 2), num(m, 3), num(m, 4));
             case "GAME_OVER" -> {
-                game.onGameOver(m[1], Integer.parseInt(m[2]), m[3], Double.parseDouble(m[4]), Double.parseDouble(m[5]));
+                game.onGameOver(m[1], num(m, 2), m[3], dbl(m, 4), dbl(m, 5));
                 Timer t = new Timer(4500, e -> askRematch());
                 t.setRepeats(false); t.start();
             }
@@ -108,6 +121,18 @@ public class ClientMain {
             }
             default -> { }
         }
+    }
+
+    /** Đọc số nguyên an toàn từ message; giá trị thiếu/sai định dạng -> 0. */
+    private static int num(String[] m, int i) {
+        try { return (i < m.length) ? Integer.parseInt(m[i].trim()) : 0; }
+        catch (NumberFormatException e) { return 0; }
+    }
+
+    /** Đọc số thực an toàn từ message; giá trị thiếu/sai định dạng -> 0. */
+    private static double dbl(String[] m, int i) {
+        try { return (i < m.length) ? Double.parseDouble(m[i].trim()) : 0; }
+        catch (NumberFormatException e) { return 0; }
     }
 
     private void askRematch() {

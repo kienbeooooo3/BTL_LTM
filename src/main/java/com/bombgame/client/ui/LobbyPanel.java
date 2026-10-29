@@ -228,14 +228,20 @@ public class LobbyPanel extends JPanel {
 
     public void toast(String s) { toast.set(s); }
 
+    /**
+     * Cập nhật danh sách người chơi online.
+     * Dữ liệu server: "ten,diem,thang,BUSY|FREE" ngăn cách bằng ";".
+     * Bỏ qua các dòng thiếu/trung field để không nổ exception làm treo giao diện.
+     */
     public void setPlayers(String data) {
         int sel = pt.getSelectedRow();
         String keep = sel >= 0 ? String.valueOf(pm.getValueAt(sel, 0)) : null;
         pm.setRowCount(0);
         int free = 0;
-        if (!data.isEmpty()) for (String row : data.split(";")) {
+        if (data != null && !data.isEmpty()) for (String row : data.split(";")) {
             String[] f = row.split(",");
-            boolean isFree = f[3].equals("FREE");
+            if (f.length < 4) continue;                       // dòng lỗi -> bỏ qua
+            boolean isFree = "FREE".equals(f[3]);
             if (isFree) free++;
             pm.addRow(new Object[]{f[0].equals(me) ? f[0] + " (bạn)" : f[0], f[1], f[2], isFree ? "● Rảnh" : "● Bận"});
         }
@@ -244,12 +250,14 @@ public class LobbyPanel extends JPanel {
             if (keep.equals(pm.getValueAt(i, 0))) pt.setRowSelectionInterval(i, i);
     }
 
+    /** Cập nhật bảng xếp hạng: "ten,diem,thang,tran" ngăn cách bằng ";". */
     public void setBoard(String data) {
         bm.setRowCount(0);
-        if (data.isEmpty()) { total.setText(""); return; }
+        if (data == null || data.isEmpty()) { total.setText(""); return; }
         int rank = 1;
         for (String row : data.split(";")) {
             String[] f = row.split(",");
+            if (f.length < 4) continue;                       // dòng lỗi -> bỏ qua
             bm.addRow(new Object[]{"#" + rank++, f[0], f[1], f[2], f[3]});
         }
         total.setText("Top " + bm.getRowCount());
