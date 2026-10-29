@@ -10,12 +10,20 @@
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <junit.version>5.12.2</junit.version>
   </properties>
   <dependencies>
     <dependency>
       <groupId>com.mysql</groupId>
       <artifactId>mysql-connector-j</artifactId>
       <version>8.3.0</version>
+    </dependency>
+    <!-- Test -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
   <build>
@@ -25,6 +33,28 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.1.0</version>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.5</version>
+        <configuration>
+          <!-- Test tich hop can MySQL + server chay san; bo qua neu khong co -->
+          <excludedGroups>${excludedGroups}</excludedGroups>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
+  <profiles>
+    <profile>
+      <!-- mvn test -Pintegration : chay ca test tich hop (can MySQL + server) -->
+      <id>integration</id>
+      <properties><excludedGroups>none</excludedGroups></properties>
+    </profile>
+    <profile>
+      <!-- mac dinh: chi chay unit test -->
+      <id>unit-only</id>
+      <activation><activeByDefault>true</activeByDefault></activation>
+      <properties><excludedGroups>integration</excludedGroups></properties>
+    </profile>
+  </profiles>
 </project>
