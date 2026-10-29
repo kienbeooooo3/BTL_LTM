@@ -51,7 +51,7 @@ public class ClientHandler extends Thread {
         // sau khi kết nối, không đợi đăng nhập xong).
         if ("PING".equals(m[0])) { send("PONG"); return; }
         if (name == null) {
-            if (m.length < 3) return;
+            if (m.length < 3) { send("ERROR|Lệnh không hợp lệ (thiếu tham số)"); return; }
             String u = m[1].trim().toLowerCase(), p = m[2];
             if (m[0].equals("REGISTER")) {
                 if (!u.matches("[a-z0-9_]{3,16}") || p.length() < 3) { send("LOGIN_FAIL|Tên 3-16 ký tự (a-z, 0-9, _), mật khẩu ≥ 3 ký tự"); return; }
