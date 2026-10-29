@@ -75,7 +75,7 @@ public class ClientMain {
     private void toLobby() {
         inGame = false;
         if (rematchDlg != null) rematchDlg.close();
-        show("lobby"); lobby.toast(" "); net.send("BOARD");
+        show("lobby"); lobby.toast(" "); lobby.setInvitePending(false); net.send("BOARD");
     }
 
     private void onMsg(String[] m) {
@@ -85,13 +85,15 @@ public class ClientMain {
             case "REGISTER_OK" -> login.info("Đăng ký thành công! Hãy đăng nhập.");
             case "PLAYERS" -> { lobby.setPlayers(m[1]); if (!inGame) net.send("BOARD"); }
             case "BOARD" -> lobby.setBoard(m[1]);
-            case "INVITE_FAIL" -> lobby.toast(m[1]);
-            case "INVITE_REJECTED" -> lobby.toast(m[1] + " đã từ chối lời thách đấu");
+            case "INVITE_FAIL" -> { lobby.toast(m[1]); lobby.setInvitePending(false); }
+            case "INVITE_REJECTED" -> { lobby.toast(m[1] + " đã từ chối lời thách đấu"); lobby.setInvitePending(false); }
+            case "INVITE_EXPIRED" -> { lobby.toast(m[1] + " không phản hồi — lời thách đấu đã hết hạn"); lobby.setInvitePending(false); }
+            case "INVITE_CANCELLED" -> { lobby.toast(m[1] + " đã hủy lời thách đấu"); lobby.setInvitePending(false); }
             case "INVITE" -> {
                 boolean ok = NeonDialog.confirm(f, "Lời thách đấu", m[1] + " thách đấu bạn một ván Bom!", "CHẤP NHẬN", "TỪ CHỐI");
                 net.send((ok ? "ACCEPT|" : "REJECT|") + m[1]);
             }
-            case "MATCH_START" -> { oppName = m[1]; inGame = true; game.start(me, oppName); show("game"); }
+            case "MATCH_START" -> { oppName = m[1]; inGame = true; lobby.setInvitePending(false); game.start(me, oppName); show("game"); }
             case "ROUND" -> game.onRound(Integer.parseInt(m[1]), Integer.parseInt(m[2]), Integer.parseInt(m[3]), Integer.parseInt(m[4]));
             case "RESULT" -> game.onResult(Integer.parseInt(m[1]), Integer.parseInt(m[2]), Integer.parseInt(m[3]), Integer.parseInt(m[4]));
             case "GAME_OVER" -> {

@@ -3,6 +3,8 @@ package com.bombgame.server;
 import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeUnit;
 
 /** Xử lý 1 client: đăng nhập, thách đấu, chuyển lệnh vào phòng chơi. */
 public class ClientHandler extends Thread {
@@ -14,6 +16,10 @@ public class ClientHandler extends Thread {
     volatile boolean busy;
     volatile GameRoom room;
     volatile String invitedBy, invitedTarget;
+    /** Lệnh hủy lời mời đang chờ (dùng để hủy timer khi accept/reject xử lý xong). */
+    private volatile String inviteCancelToken;
+    /** Hẹn giờ tự hủy lời mời nếu đối thủ không phản hồi trong {@link #INVITE_TIMEOUT_MS}. */
+    private static final long INVITE_TIMEOUT_MS = 30_000;
 
     ClientHandler(Socket s) { this.sock = s; setDaemon(true); }
 
@@ -56,6 +62,7 @@ public class ClientHandler extends Thread {
             case "CHALLENGE" -> challenge(m[1]);
             case "ACCEPT" -> accept(m[1]);
             case "REJECT" -> reject(m[1]);
+            case "CANCEL_INVITE" -> cancelInvite();
             case "GUESS" -> { GameRoom r = room; if (r != null) r.guess(this, Integer.parseInt(m[1])); }
             case "LEAVE" -> { GameRoom r = room; if (r != null) r.leave(this); }
             case "REMATCH" -> { GameRoom r = room; if (r != null) r.rematch(this, m[1].equals("1")); }
@@ -70,6 +77,40 @@ public class ClientHandler extends Thread {
             if (t == null || t == this || t.busy || busy) { send("INVITE_FAIL|Đối thủ không rảnh"); return; }
             busy = t.busy = true; invitedTarget = target; t.invitedBy = name;
             t.send("INVITE|" + name);
+            scheduleInviteTimeout(t);   // tự hủy sau 30s nếu đối thủ im lặng -> không kẹt BUSY vĩnh viễn
+        }
+        GameServer.broadcastPlayers();
+    }
+
+    /** Hẹn giờ hủy lời mời nếu sau {@link #INVITE_TIMEOUT_MS} đối thủ không phản hồi. */
+    private void scheduleInviteTimeout(ClientHandler target) {
+        final String token = name + "#" + System.nanoTime();
+        inviteCancelToken = token;
+        target.inviteCancelToken = token;
+        GameRoom.SCH.schedule(() -> {
+            synchronized (GameServer.class) {
+                // Chỉ hủy nếu lời mời vẫn còn nguyên (chưa accept/reject/hủy).
+                if (!token.equals(inviteCancelToken) || !token.equals(target.inviteCancelToken)) return;
+                inviteCancelToken = null; target.inviteCancelToken = null;
+                if (invitedTarget != null) { invitedTarget = null; busy = false; }
+                if (target.invitedBy != null) {
+                    target.invitedBy = null; target.busy = false;
+                    target.send("INVITE_EXPIRED|" + name);
+                }
+            }
+            GameServer.broadcastPlayers();
+        }, INVITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /** Người thách tự hủy lời mời đang chờ. */
+    private void cancelInvite() {
+        synchronized (GameServer.class) {
+            ClientHandler t = invitedTarget == null ? null : GameServer.ONLINE.get(invitedTarget);
+            invitedTarget = null; busy = false;
+            if (t != null && name.equals(t.invitedBy)) {
+                t.invitedBy = null; t.busy = false;
+                t.send("INVITE_CANCELLED|" + name);
+            }
         }
         GameServer.broadcastPlayers();
     }
@@ -77,9 +118,12 @@ public class ClientHandler extends Thread {
     private void accept(String from) {
         synchronized (GameServer.class) {
             ClientHandler f = GameServer.ONLINE.get(from);
-            if (f == null || !name.equals(f.invitedTarget)) { busy = false; invitedBy = null; }
+            // Kiểm tra đúng chiều: chính mình phải là người được mời (invitedBy của mình trỏ tới from).
+            if (f == null || !from.equals(invitedBy)) { busy = false; invitedBy = null; }
             else {
-                f.invitedTarget = null; invitedBy = null;
+                invitedBy = null;
+                f.invitedTarget = null; f.busy = false;
+                inviteCancelToken = null; f.inviteCancelToken = null;   // hủy hẹn giờ của cả hai bên
                 GameRoom r = new GameRoom(f, this);
                 f.room = room = r;
                 r.start();
@@ -91,7 +135,11 @@ public class ClientHandler extends Thread {
     private void reject(String from) {
         synchronized (GameServer.class) {
             ClientHandler f = GameServer.ONLINE.get(from);
-            if (f != null && name.equals(f.invitedTarget)) { f.invitedTarget = null; f.busy = false; f.send("INVITE_REJECTED|" + name); }
+            if (f != null && from.equals(invitedBy)) {
+                invitedBy = null; f.invitedTarget = null; f.busy = false;
+                f.inviteCancelToken = null; inviteCancelToken = null;
+                f.send("INVITE_REJECTED|" + name);
+            }
             invitedBy = null; busy = false;
         }
         GameServer.broadcastPlayers();
@@ -105,12 +153,13 @@ public class ClientHandler extends Thread {
             synchronized (GameServer.class) {
                 if (invitedBy != null) {
                     ClientHandler f = GameServer.ONLINE.get(invitedBy);
-                    if (f != null) { f.busy = false; f.invitedTarget = null; f.send("INVITE_REJECTED|" + name); }
+                    if (f != null) { f.busy = false; f.invitedTarget = null; f.inviteCancelToken = null; f.send("INVITE_REJECTED|" + name); }
                 }
                 if (invitedTarget != null) {
                     ClientHandler t = GameServer.ONLINE.get(invitedTarget);
-                    if (t != null) { t.busy = false; t.invitedBy = null; }
+                    if (t != null) { t.busy = false; t.invitedBy = null; t.inviteCancelToken = null; t.send("INVITE_CANCELLED|" + name); }
                 }
+                inviteCancelToken = null;
             }
             GameServer.broadcastPlayers();
         }

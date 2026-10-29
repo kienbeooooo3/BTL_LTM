@@ -17,6 +17,8 @@ public class LobbyPanel extends JPanel {
     private final DefaultTableModel pm = model("Người chơi", "Điểm", "Thắng", "Trạng thái");
     private final DefaultTableModel bm = model("Hạng", "Người chơi", "Điểm", "Thắng", "Trận");
     private final JTable pt = new Theme.NeonTable(pm, "Chưa có ai online"), bt = new Theme.NeonTable(bm, "Chưa có dữ liệu xếp hạng");
+    private final NeonButton cancel = new NeonButton("HỦY LỜI MỜI", Theme.GOLD);
+    private final NeonButton go = new NeonButton("THÁCH ĐẤU", Theme.PINK);
     private final Pill online = new Pill(Theme.GREEN), total = new Pill(Theme.GOLD);
     private final Chip chip = new Chip();
     private final Toast toast = new Toast();
@@ -144,12 +146,17 @@ public class LobbyPanel extends JPanel {
         right.setBorder(new EmptyBorder(18, 18, 18, 18));
         left.add(head("NGƯỜI CHƠI ONLINE", Theme.GREEN, online), BorderLayout.NORTH);
         left.add(Theme.table(pt, false));
-        NeonButton go = new NeonButton("THÁCH ĐẤU", Theme.PINK);
+        NeonButton go = this.go;
         go.setPreferredSize(new Dimension(100, 54));
+        cancel.setPreferredSize(new Dimension(100, 54));
+        cancel.setEnabled(false);
         JLabel hint = new JLabel("Bấm đúp vào một người chơi để thách đấu nhanh", SwingConstants.CENTER);
         hint.setFont(Theme.font(Font.PLAIN, 12)); hint.setForeground(Theme.MUTED);
         JPanel south = new JPanel(new BorderLayout(0, 2));
-        south.setOpaque(false); south.add(go); south.add(hint, BorderLayout.SOUTH);
+        south.setOpaque(false);
+        JPanel goRow = new JPanel(new GridLayout(1, 2, 8, 0));
+        goRow.setOpaque(false); goRow.add(go); goRow.add(cancel);
+        south.add(goRow); south.add(hint, BorderLayout.SOUTH);
         left.add(south, BorderLayout.SOUTH);
         right.add(head("BẢNG XẾP HẠNG", Theme.GOLD, total), BorderLayout.NORTH);
         right.add(Theme.table(bt, true));
@@ -160,6 +167,7 @@ public class LobbyPanel extends JPanel {
         pt.setToolTipText("Chọn người chơi rồi bấm THÁCH ĐẤU; bấm đúp để thách đấu nhanh");
         bt.setToolTipText("Bảng xếp hạng người chơi");
         go.addActionListener(e -> challenge());
+        cancel.addActionListener(e -> { net.send("CANCEL_INVITE"); setInvitePending(false); toast("Đã hủy lời thách đấu"); });
         pt.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) challenge(); }
         });
@@ -199,7 +207,14 @@ public class LobbyPanel extends JPanel {
         if (name.equals(me)) { toast("Bạn không thể tự thách đấu chính mình!"); return; }
         if (!String.valueOf(pm.getValueAt(r, 3)).contains("Rảnh")) { toast(name + " đang bận"); return; }
         net.send("CHALLENGE|" + name);
+        setInvitePending(true);
         toast("Đã gửi lời thách đấu tới " + name + "… đang chờ phản hồi");
+    }
+
+    /** Bật/tắt nút HỦY LỜI MỜI (đang chờ đối thủ phản hồi hay không). */
+    public void setInvitePending(boolean pending) {
+        cancel.setEnabled(pending);
+        go.setEnabled(!pending);
     }
 
     public void setMe(String n) {
@@ -208,6 +223,7 @@ public class LobbyPanel extends JPanel {
         bt.putClientProperty("me", n);
         chip.setUser(n);
         toast.set("");
+        setInvitePending(false);
     }
 
     public void toast(String s) { toast.set(s); }
